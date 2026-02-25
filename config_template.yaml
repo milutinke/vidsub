@@ -1,0 +1,79 @@
+# vidsub configuration template
+# Copy this file to vidsub.yaml and customize
+
+app:
+  out_dir: "./out"
+  temp_dir: "./.vidsub_tmp"
+  overwrite: false
+  keep_temp: false
+
+engine:
+  name: "whisper"  # whisper | gemini
+  language: "en"
+
+whisper:
+  model: "large"
+  device: "auto"   # auto, cpu, cuda, mps
+  vad: true
+  accurate: true
+
+gemini:
+  model: "gemini-2.5-pro"
+  api_key_env: "GEMINI_API_KEY"
+  chunk_seconds: 30
+  overlap_seconds: 2
+  fps: 1
+  max_retries: 2
+  concurrency: 2
+
+subtitles:
+  formats: ["srt", "ass"]
+  max_chars_per_line: 42
+  max_lines: 2
+  max_caption_seconds: 6.0
+  split_on_silence_ms: 350
+  background_style: "none"  # none | solid
+
+style_ass:
+  font_name: "Inter"
+  font_size: 44
+  outline: 3
+  shadow: 0
+  margin_v: 40
+  bg_color: "black"
+
+ffmpeg:
+  default_preset: "youtube_1080p"
+  presets:
+    youtube_1080p:
+      video_codec: "libx264"
+      audio_codec: "copy"
+      crf: 18
+      preset: "medium"
+      pixel_format: "yuv420p"
+      description: "Optimized for YouTube 1080p uploads"
+
+    youtube_4k:
+      video_codec: "libx264"
+      audio_codec: "copy"
+      crf: 17
+      preset: "slow"
+      pixel_format: "yuv420p"
+      description: "High quality for YouTube 4K uploads"
+
+    web_optimized:
+      video_codec: "libx264"
+      audio_codec: "aac"
+      audio_bitrate: "128k"
+      crf: 23
+      preset: "fast"
+      pixel_format: "yuv420p"
+      description: "Smaller file size for web sharing"
+
+    archive:
+      video_codec: "libx264"
+      audio_codec: "flac"
+      crf: 15
+      preset: "veryslow"
+      pixel_format: "yuv420p"
+      description: "Maximum quality for archival"

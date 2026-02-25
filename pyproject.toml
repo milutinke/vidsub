@@ -1,0 +1,110 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vidsub"
+version = "0.1.0"
+description = "CLI tool for video subtitling with dual-engine transcription"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.14"
+authors = [
+    {name = "Vidsub Contributors"},
+]
+keywords = ["video", "subtitles", "transcription", "whisper", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "certifi>=2024.0.0",
+    "google-genai>=1.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+    "typer>=0.9.0",
+    "whisper-timestamped>=1.14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.0.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "types-pyyaml>=6.0",
+]
+
+[project.scripts]
+vidsub = "vidsub.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/vidsub"
+Documentation = "https://github.com/yourusername/vidsub#readme"
+Repository = "https://github.com/yourusername/vidsub"
+Issues = "https://github.com/yourusername/vidsub/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["vidsub"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.isort]
+known-first-party = ["vidsub"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["vidsub"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "onnxruntime>=1.24.2",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.2",
+    "torchaudio>=2.10.0",
+    "types-pyyaml>=6.0.12.20250915",
+]
