@@ -61,11 +61,17 @@ TRANSCRIPT_SCHEMA = {
                 "properties": {
                     "start": {
                         "type": "number",
-                        "description": "Start time in seconds from the full video timeline",
+                        "description": (
+                            "Start time in seconds from the full video timeline when the first "
+                            "spoken word becomes audible"
+                        ),
                     },
                     "end": {
                         "type": "number",
-                        "description": "End time in seconds from the full video timeline",
+                        "description": (
+                            "End time in seconds from the full video timeline when the last "
+                            "spoken word finishes"
+                        ),
                     },
                     "text": {
                         "type": "string",
@@ -84,6 +90,23 @@ TRANSCRIPT_SCHEMA = {
 }
 
 
+def _format_prompt_time(seconds: float) -> str:
+    """Format a clip boundary for prompt-visible wall-clock references.
+
+    Args:
+        seconds: Offset in seconds on the full video timeline.
+
+    Returns:
+        A `MM:SS` or `HH:MM:SS` string.
+    """
+    total_seconds = max(0, int(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
 def _build_prompt(chunk_start: float, chunk_duration: float) -> str:
     """Build a transcription prompt for Gemini.
 
@@ -95,26 +118,50 @@ def _build_prompt(chunk_start: float, chunk_duration: float) -> str:
         Prompt string for Gemini.
     """
     chunk_end = chunk_start + chunk_duration
-    return f"""Transcribe the spoken audio from this video clip.
+    clip_start = _format_prompt_time(chunk_start)
+    clip_end = _format_prompt_time(chunk_end)
+    return f"""<task>
+Transcribe the spoken audio from this video clip and return one JSON object only.
+</task>
 
-This clip covers the full-video time range {chunk_start:.1f}s to {chunk_end:.1f}s.
+<context>
+This clip covers the full-video time range {chunk_start:.1f}s to {chunk_end:.1f}s
+({clip_start} to {clip_end} on the full video timeline).
+Timestamp accuracy is the highest priority.
+</context>
 
-Return one JSON object with this structure:
+<output>
+Return one JSON object with:
 - language: ISO 639-1 language code
-- segments: array of objects with:
-  - start: segment start time in seconds relative to the full video
-  - end: segment end time in seconds relative to the full video
-  - text: verbatim spoken text
+- segments: array of objects with start, end, and text
+</output>
 
-Rules:
-- Timestamps must stay within [{chunk_start:.1f}, {chunk_end:.1f}]
-- Segments must be chronological and non-overlapping
-- Use proper punctuation and capitalization
-- Prefer coherent phrase-level segments over many tiny fragments
-- If this chunk overlaps adjacent chunks, do not repeat speech that appears in the overlap
-- Do not include silence, music-only spans, or non-speech filler descriptions
+<timing_rules>
+- Every start timestamp is the moment the first spoken word becomes audible.
+- Every end timestamp is the moment the last spoken word finishes.
+- Use seconds on the full video timeline, with decimals when needed.
+- Timestamps must stay within [{chunk_start:.1f}, {chunk_end:.1f}].
+- Segments must be chronological and non-overlapping.
+- Use proper punctuation and capitalization.
+- Prefer coherent phrase-level segments over many tiny fragments.
+- Do not shift it earlier or later to make subtitles look cleaner or more even.
+- Do not infer speech before it is audible or after it has ended.
+- If this chunk overlaps adjacent chunks, do not repeat speech that appears in the overlap.
+- Do not include silence, music-only spans, or non-speech filler descriptions.
+</timing_rules>
 
-Respond only with valid JSON matching the schema.
+<example_alignment>
+Example alignment:
+If a phrase begins when the first spoken word becomes audible at 12.4 and the
+last spoken word finishes at 14.1, then use start=12.4 and end=14.1. Do not
+shift it earlier or later.
+</example_alignment>
+
+<verification>
+Before responding, internally verify that every segment start matches audible
+speech onset, every segment end matches when speech stops, timestamps stay
+within range, and the response is valid JSON matching the schema. Respond only with valid JSON matching the schema.
+</verification>
 """
 
 
@@ -423,8 +470,8 @@ class GeminiEngine(TranscriptionEngine):
                     types.Content(
                         role="user",
                         parts=[
-                            types.Part.from_text(text=prompt),
                             types.Part.from_uri(file_uri=file_uri, mime_type=mime_type),
+                            types.Part.from_text(text=prompt),
                         ],
                     )
                 ],

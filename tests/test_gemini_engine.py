@@ -10,7 +10,13 @@ from typing import Any, cast
 import pytest
 from google.genai import errors
 
-from vidsub.engines.gemini_engine import ChunkJob, GeminiEngine, GeminiError, _build_prompt
+from vidsub.engines.gemini_engine import (
+    TRANSCRIPT_SCHEMA,
+    ChunkJob,
+    GeminiEngine,
+    GeminiError,
+    _build_prompt,
+)
 from vidsub.models import Config, EngineConfig, GeminiConfig, Segment
 
 
@@ -35,6 +41,43 @@ class TestBuildPrompt:
         prompt = _build_prompt(58.0, 60.0)
         assert "overlap" in prompt.lower()
         assert "do not repeat speech" in prompt.lower()
+
+    def test_uses_mmss_clip_range(self) -> None:
+        prompt = _build_prompt(30.0, 10.0)
+        assert "00:30" in prompt
+        assert "00:40" in prompt
+
+    def test_mentions_audible_onset_and_offset_alignment(self) -> None:
+        prompt = _build_prompt(0.0, 30.0)
+        assert "first spoken word becomes audible" in prompt.lower()
+        assert "last spoken word finishes" in prompt.lower()
+
+    def test_includes_internal_verification_step(self) -> None:
+        prompt = _build_prompt(0.0, 30.0)
+        assert "before responding, internally verify" in prompt.lower()
+
+    def test_includes_alignment_example(self) -> None:
+        prompt = _build_prompt(0.0, 30.0)
+        assert "example alignment" in prompt.lower()
+        assert "do not shift it earlier or later" in prompt.lower()
+
+
+class TestTranscriptSchema:
+    """Tests for transcript schema guidance."""
+
+    def test_schema_describes_audible_boundaries(self) -> None:
+        schema_properties = cast(dict[str, Any], TRANSCRIPT_SCHEMA["properties"])
+        segment_properties = cast(
+            dict[str, Any],
+            cast(dict[str, Any], cast(dict[str, Any], schema_properties["segments"])["items"])[
+                "properties"
+            ],
+        )
+        start_description = cast(dict[str, str], segment_properties["start"])["description"]
+        end_description = cast(dict[str, str], segment_properties["end"])["description"]
+
+        assert "first spoken word" in start_description.lower()
+        assert "last spoken word" in end_description.lower()
 
 
 class TestGeminiEngine:
@@ -277,6 +320,32 @@ class TestGeminiEngine:
                 chunk_start=0.0,
                 chunk_duration=10.0,
             )
+
+    @pytest.mark.asyncio
+    async def test_transcribe_uploaded_chunk_places_video_before_text(
+        self, engine: GeminiEngine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, Any] = {}
+
+        async def fake_generate_content(**kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return SimpleNamespace(text='{"segments": [], "language": "en"}')
+
+        fake_client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=fake_generate_content),
+        )
+
+        monkeypatch.setattr(engine, "_get_async_client", lambda: fake_client)
+
+        await engine._transcribe_uploaded_chunk(
+            cast(Any, SimpleNamespace(uri="files/test", mime_type="video/mp4")),
+            chunk_start=30.0,
+            chunk_duration=10.0,
+        )
+
+        parts = captured["contents"][0].parts
+        assert getattr(parts[0], "file_data", None) is not None
+        assert getattr(parts[1], "text", None) is not None
 
     @pytest.mark.asyncio
     async def test_upload_poll_timeout_raises_gemini_error(
