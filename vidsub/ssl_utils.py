@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import functools
+import importlib
 import logging
 import ssl
 import sys
 import urllib.request
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, cast
 
 try:
     import certifi
@@ -36,7 +38,7 @@ def _create_ssl_context_with_certifi() -> ssl.SSLContext | None:
 
 
 @contextmanager
-def patched_urlopen() -> Generator[None, None, None]:
+def patched_urlopen() -> Generator[None]:
     """Temporarily patch urllib.request.urlopen to use certifi certificates.
 
     This context manager monkey-patches urllib.request.urlopen to inject
@@ -63,7 +65,12 @@ def patched_urlopen() -> Generator[None, None, None]:
     original_urlopen = urllib.request.urlopen
 
     @functools.wraps(original_urlopen)
-    def urlopen_with_certifi(url, data=None, timeout=None, **kwargs):
+    def urlopen_with_certifi(
+        url: str | urllib.request.Request,
+        data: bytes | None = None,
+        timeout: float | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """Wrapper that injects certifi SSL context."""
         # Only inject context if not already provided and it's an HTTPS URL
         if "context" not in kwargs:
@@ -74,7 +81,7 @@ def patched_urlopen() -> Generator[None, None, None]:
         return original_urlopen(url, data, timeout, **kwargs)
 
     # Patch urllib.request.urlopen
-    urllib.request.urlopen = urlopen_with_certifi
+    urllib.request.urlopen = cast(Any, urlopen_with_certifi)
 
     # Also patch torch.hub's imported urlopen if torch is already loaded
     # torch.hub does: from urllib.request import Request, urlopen
@@ -82,10 +89,10 @@ def patched_urlopen() -> Generator[None, None, None]:
     torch_hub_patched = False
     if "torch" in sys.modules:
         try:
-            import torch.hub
+            torch_hub = cast(Any, importlib.import_module("torch.hub"))
 
-            if hasattr(torch.hub, "urlopen"):
-                torch.hub.urlopen = urlopen_with_certifi
+            if hasattr(torch_hub, "urlopen"):
+                torch_hub.urlopen = urlopen_with_certifi
                 torch_hub_patched = True
                 logger.debug("Patched torch.hub.urlopen")
         except Exception as e:
@@ -94,18 +101,18 @@ def patched_urlopen() -> Generator[None, None, None]:
     try:
         yield
     finally:
-        urllib.request.urlopen = original_urlopen
+        urllib.request.urlopen = cast(Any, original_urlopen)
         if torch_hub_patched:
             try:
-                import torch.hub
+                torch_hub = cast(Any, importlib.import_module("torch.hub"))
 
-                torch.hub.urlopen = original_urlopen
+                torch_hub.urlopen = original_urlopen
             except Exception:
                 pass
 
 
 @contextmanager
-def patched_ssl_context() -> Generator[None, None, None]:
+def patched_ssl_context() -> Generator[None]:
     """Temporarily patch SSL context creation to use certifi certificates.
 
     This context manager monkey-patches ssl.create_default_context() to use
@@ -122,7 +129,7 @@ def patched_ssl_context() -> Generator[None, None, None]:
 
     original_create_default_context = ssl.create_default_context
 
-    def create_context_with_certifi(*args, **kwargs) -> ssl.SSLContext:
+    def create_context_with_certifi(*args: Any, **kwargs: Any) -> ssl.SSLContext:
         """Create SSL context using certifi certificate bundle."""
         context = original_create_default_context(*args, **kwargs)
         context.load_verify_locations(certifi.where())

@@ -58,11 +58,15 @@ class TestLoadYamlConfig:
 class TestLoadConfig:
     """Tests for full config loading with precedence."""
 
-    def test_defaults_only(self) -> None:
+    def test_defaults_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("VIDSUB_ENGINE", raising=False)
         config = load_config()
         assert isinstance(config, Config)
         assert config.app.out_dir == "./out"
         assert config.engine.name == "whisper"
+        assert config.gemini.chunk_seconds == 60
+        assert config.gemini.concurrency == 3
 
     def test_cli_overrides_take_precedence(self, tmp_path: Path) -> None:
         config_file = tmp_path / "vidsub.yaml"

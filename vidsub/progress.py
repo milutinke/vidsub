@@ -8,20 +8,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import Any, TypeVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
 # Try to import tqdm, but provide fallback if not available
 try:
-    from tqdm import tqdm
+    from tqdm import tqdm  # type: ignore[import-untyped]
 
     _TQDM_AVAILABLE = True
 except ImportError:
     _TQDM_AVAILABLE = False
-    tqdm = None  # type: ignore[misc, assignment]
+    tqdm = None
 
 
 def is_progress_available() -> bool:
@@ -29,7 +27,7 @@ def is_progress_available() -> bool:
     return _TQDM_AVAILABLE
 
 
-def get_progress_bar(
+def get_progress_bar[T](
     iterable: Iterable[T] | None = None,
     total: int | None = None,
     desc: str | None = None,
@@ -37,7 +35,7 @@ def get_progress_bar(
     unit: str = "it",
     unit_scale: bool = False,
     **kwargs: Any,
-) -> Iterable[T] | Any:
+) -> Iterable[T] | _ManualProgress | Any:
     """Get a progress bar wrapper for an iterable.
 
     This function provides a progress bar via tqdm when available,
@@ -161,11 +159,11 @@ class ProgressManager:
     @classmethod
     def progress(
         cls,
-        iterable: Iterable[T] | None = None,
+        iterable: Iterable[Any] | None = None,
         total: int | None = None,
         desc: str | None = None,
         **kwargs: Any,
-    ) -> Iterable[T] | Any:
+    ) -> Iterable[Any] | _ManualProgress | Any:
         """Get a progress bar with global enable/disable check.
 
         Args:

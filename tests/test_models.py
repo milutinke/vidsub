@@ -8,6 +8,7 @@ from vidsub.models import (
     CanonicalTranscript,
     Config,
     EngineConfig,
+    GeminiConfig,
     Segment,
     Word,
 )
@@ -84,6 +85,19 @@ class TestConfig:
         )
         assert config.app.out_dir == "./custom"
         assert config.engine.name == "gemini"
+
+    def test_gemini_defaults_are_throughput_tuned(self) -> None:
+        gemini = GeminiConfig()
+        assert gemini.chunk_seconds == 60
+        assert gemini.concurrency == 3
+        assert gemini.upload_timeout_sec == 180
+        assert gemini.poll_interval_sec == 2.0
+        assert gemini.retry_base_delay_sec == 1.0
+        assert gemini.retry_max_delay_sec == 8.0
+
+    def test_gemini_timeout_values_are_validated(self) -> None:
+        with pytest.raises(ValidationError):
+            GeminiConfig(upload_timeout_sec=0)
 
 
 class TestModelEdgeCases:

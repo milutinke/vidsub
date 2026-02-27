@@ -191,11 +191,15 @@ whisper:
 gemini:
   model: "gemini-2.5-pro"
   api_key_env: "GEMINI_API_KEY"
-  chunk_seconds: 30
+  chunk_seconds: 60
   overlap_seconds: 2
   fps: 1
   max_retries: 2
-  concurrency: 2
+  concurrency: 3
+  upload_timeout_sec: 180
+  poll_interval_sec: 2.0
+  retry_base_delay_sec: 1.0
+  retry_max_delay_sec: 8.0
 
 subtitles:
   formats: ["srt", "ass"]

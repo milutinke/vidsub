@@ -84,11 +84,15 @@ class GeminiConfig(BaseModel):
 
     model: str = "gemini-2.5-pro"
     api_key_env: str = "GEMINI_API_KEY"
-    chunk_seconds: int = Field(default=30, ge=10, le=120)
+    chunk_seconds: int = Field(default=60, ge=10, le=180)
     overlap_seconds: int = Field(default=2, ge=0, le=10)
     fps: int = Field(default=1, ge=1, le=10)
     max_retries: int = Field(default=2, ge=0, le=5)
-    concurrency: int = Field(default=2, ge=1, le=5)
+    concurrency: int = Field(default=3, ge=1, le=8)
+    upload_timeout_sec: int = Field(default=180, ge=1, le=600)
+    poll_interval_sec: float = Field(default=2.0, gt=0, le=30.0)
+    retry_base_delay_sec: float = Field(default=1.0, gt=0, le=30.0)
+    retry_max_delay_sec: float = Field(default=8.0, gt=0, le=120.0)
 
 
 class SubtitleConfig(BaseModel):

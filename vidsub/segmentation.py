@@ -7,8 +7,6 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from vidsub.progress import get_progress_bar
-
 if TYPE_CHECKING:
     from vidsub.models import Segment, SubtitleConfig
 

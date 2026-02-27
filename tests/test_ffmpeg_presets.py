@@ -1,6 +1,7 @@
 """Tests for FFmpeg preset configuration."""
 
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -88,7 +89,7 @@ class TestApplyDefaultFFmpegPresets:
 
     def test_empty_config_gets_default_preset(self) -> None:
         """Test that empty config gets default YouTube preset."""
-        config_dict: dict = {}
+        config_dict: dict[str, Any] = {}
 
         result = _apply_default_ffmpeg_presets(config_dict)
 
@@ -235,10 +236,12 @@ class TestBurnWithPresets:
 
     @mock.patch("vidsub.burn.subprocess.run")
     @mock.patch("vidsub.burn.get_ffmpeg_path")
+    @mock.patch("vidsub.burn._check_ffmpeg_subtitles_filter")
     @mock.patch("vidsub.ffmpeg.probe_video")
     def test_burn_uses_preset_values(
         self,
         mock_probe: mock.MagicMock,
+        _mock_check_filter: mock.MagicMock,
         mock_get_ffmpeg: mock.MagicMock,
         mock_run: mock.MagicMock,
         tmp_path: Path,
@@ -272,10 +275,12 @@ class TestBurnWithPresets:
 
     @mock.patch("vidsub.burn.subprocess.run")
     @mock.patch("vidsub.burn.get_ffmpeg_path")
+    @mock.patch("vidsub.burn._check_ffmpeg_subtitles_filter")
     @mock.patch("vidsub.ffmpeg.probe_video")
     def test_burn_with_custom_preset_name(
         self,
         mock_probe: mock.MagicMock,
+        _mock_check_filter: mock.MagicMock,
         mock_get_ffmpeg: mock.MagicMock,
         mock_run: mock.MagicMock,
         tmp_path: Path,
@@ -313,10 +318,12 @@ class TestBurnWithPresets:
 
     @mock.patch("vidsub.burn.subprocess.run")
     @mock.patch("vidsub.burn.get_ffmpeg_path")
+    @mock.patch("vidsub.burn._check_ffmpeg_subtitles_filter")
     @mock.patch("vidsub.ffmpeg.probe_video")
     def test_burn_with_audio_bitrate(
         self,
         mock_probe: mock.MagicMock,
+        _mock_check_filter: mock.MagicMock,
         mock_get_ffmpeg: mock.MagicMock,
         mock_run: mock.MagicMock,
         tmp_path: Path,
@@ -360,10 +367,12 @@ class TestBurnWithPresets:
 
     @mock.patch("vidsub.burn.subprocess.run")
     @mock.patch("vidsub.burn.get_ffmpeg_path")
+    @mock.patch("vidsub.burn._check_ffmpeg_subtitles_filter")
     @mock.patch("vidsub.ffmpeg.probe_video")
     def test_burn_with_extra_args(
         self,
         mock_probe: mock.MagicMock,
+        _mock_check_filter: mock.MagicMock,
         mock_get_ffmpeg: mock.MagicMock,
         mock_run: mock.MagicMock,
         tmp_path: Path,

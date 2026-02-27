@@ -1,6 +1,6 @@
 # vidsub
 
-CLI tool for video subtitling with dual-engine transcription (Google Gemini 2.5 Pro or whisper-timestamped).
+CLI tool for video subtitling with dual-engine transcription (Google Gemini or whisper-timestamped).
 
 ## Features
 
@@ -10,7 +10,13 @@ CLI tool for video subtitling with dual-engine transcription (Google Gemini 2.5 
 - **Configurable styling**: Font, size, background options, and ASS styling
 - **FFmpeg presets**: Built-in presets for YouTube, web, and archival
 - **Progress tracking**: Visual progress bars for long operations
+- **Parallel Gemini chunking**: Bounded parallel chunk processing with retry/backoff
 - **Cross-platform**: Linux, macOS, Windows
+
+## Recommendation
+
+Whisper is the recommended engine for most users. It generally provides better timestamp
+accuracy, and it runs on your own hardware, so there are no API usage costs.
 
 ## Installation
 
@@ -189,11 +195,15 @@ whisper:
 gemini:
   model: "gemini-2.5-pro"       # Gemini model name
   api_key_env: "GEMINI_API_KEY" # Environment variable for API key
-  chunk_seconds: 30             # Video chunk size (10-120)
+  chunk_seconds: 60             # Video chunk size (10-180)
   overlap_seconds: 2            # Chunk overlap (0-10)
   fps: 1                        # Frames per second sampling (1-10)
   max_retries: 2                # Retry attempts for failed chunks (0-5)
-  concurrency: 2                # Concurrent chunk processing (1-5)
+  concurrency: 3                # Concurrent chunk processing (1-8)
+  upload_timeout_sec: 180       # Max wait for Gemini Files to become ACTIVE
+  poll_interval_sec: 2.0        # Poll interval while waiting on file processing
+  retry_base_delay_sec: 1.0     # Base delay for exponential backoff
+  retry_max_delay_sec: 8.0      # Max delay cap for Gemini retries
 
 subtitles:
   formats: ["srt", "ass"]       # Output formats
