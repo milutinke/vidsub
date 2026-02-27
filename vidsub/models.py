@@ -73,10 +73,19 @@ class AppConfig(BaseModel):
 class WhisperConfig(BaseModel):
     """Whisper engine configuration."""
 
-    model: Literal["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"] = "large"
+    model: str = "large"
     device: Literal["auto", "cpu", "cuda", "mps"] = "auto"
     vad: bool = True
     accurate: bool = True
+
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, value: str) -> str:
+        """Validate and normalize the configured Whisper model reference."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("model must not be empty")
+        return normalized
 
 
 class GeminiConfig(BaseModel):

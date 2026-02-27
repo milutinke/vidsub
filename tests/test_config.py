@@ -75,3 +75,28 @@ class TestLoadConfig:
         overrides = {"app": {"out_dir": "./from_cli"}}
         config = load_config(config_file, overrides)
         assert config.app.out_dir == "./from_cli"
+
+    def test_yaml_supports_hugging_face_whisper_model(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "vidsub.yaml"
+        config_file.write_text(
+            "whisper:\n"
+            "  model: sam8000/whisper-large-v3-turbo-serbian-serbia\n"
+        )
+
+        config = load_config(config_file)
+
+        assert config.whisper.model == "sam8000/whisper-large-v3-turbo-serbian-serbia"
+
+    def test_cli_can_override_whisper_model(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "vidsub.yaml"
+        config_file.write_text("whisper:\n  model: large\n")
+
+        overrides = {
+            "whisper": {
+                "model": "./models/custom-whisper",
+            }
+        }
+
+        config = load_config(config_file, overrides)
+
+        assert config.whisper.model == "./models/custom-whisper"

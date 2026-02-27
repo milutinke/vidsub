@@ -68,6 +68,14 @@ LanguageOption = Annotated[
     ),
 ]
 
+WhisperModelOption = Annotated[
+    str | None,
+    typer.Option(
+        "--whisper-model",
+        help="Whisper model alias, local path, or Hugging Face repo id",
+    ),
+]
+
 FormatOption = Annotated[
     str,
     typer.Option(
@@ -148,6 +156,7 @@ def _build_overrides(
     out_dir: Path | None = None,
     temp_dir: Path | None = None,
     language: str | None = None,
+    whisper_model: str | None = None,
     subtitle_bg: str | None = None,
     overwrite: bool | None = None,
     keep_temp: bool | None = None,
@@ -170,6 +179,9 @@ def _build_overrides(
     if language:
         overrides["engine"] = overrides.get("engine", {})
         overrides["engine"]["language"] = language
+    if whisper_model:
+        overrides["whisper"] = overrides.get("whisper", {})
+        overrides["whisper"]["model"] = whisper_model
     if subtitle_bg:
         overrides["subtitles"] = overrides.get("subtitles", {})
         overrides["subtitles"]["background_style"] = subtitle_bg
@@ -195,6 +207,15 @@ def _build_overrides(
     return overrides if overrides else None
 
 
+def _validate_engine_options(engine_name: str, whisper_model: str | None) -> None:
+    """Validate options specific to the selected transcription engine."""
+    if whisper_model and engine_name != "whisper":
+        raise typer.BadParameter(
+            f"whisper model overrides require the whisper engine; current engine: {engine_name}.",
+            param_hint="--whisper-model",
+        )
+
+
 @app.command()
 def run(
     video: Annotated[Path, typer.Argument(help="Input video file", exists=True)],
@@ -203,6 +224,7 @@ def run(
     out_dir: OutDirOption = None,
     temp_dir: TempDirOption = None,
     language: LanguageOption = None,
+    whisper_model: WhisperModelOption = None,
     format: FormatOption = "both",
     burn: BurnOption = False,
     overwrite: OverwriteOption = False,
@@ -226,6 +248,7 @@ def run(
         out_dir=out_dir,
         temp_dir=temp_dir,
         language=language,
+        whisper_model=whisper_model,
         subtitle_bg=subtitle_bg,
         overwrite=overwrite,
         keep_temp=keep_temp,
@@ -235,6 +258,7 @@ def run(
         preset=preset,
     )
     cfg = load_config(config, overrides)
+    _validate_engine_options(cfg.engine.name, whisper_model)
 
     typer.echo(f"Processing: {video}")
     typer.echo(f"Engine: {cfg.engine.name}")
@@ -263,6 +287,7 @@ def transcribe(
     out_dir: OutDirOption = None,
     temp_dir: TempDirOption = None,
     language: LanguageOption = None,
+    whisper_model: WhisperModelOption = None,
     format: FormatOption = "both",
     overwrite: OverwriteOption = False,
     log_level: LogLevelOption = "info",
@@ -282,6 +307,7 @@ def transcribe(
         out_dir=out_dir,
         temp_dir=temp_dir,
         language=language,
+        whisper_model=whisper_model,
         overwrite=overwrite,
         keep_temp=keep_temp,
         burn=False,
@@ -289,6 +315,7 @@ def transcribe(
         progress=progress,
     )
     cfg = load_config(config, overrides)
+    _validate_engine_options(cfg.engine.name, whisper_model)
 
     typer.echo(f"Transcribing: {video}")
     typer.echo(f"Engine: {cfg.engine.name}")

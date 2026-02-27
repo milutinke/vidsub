@@ -28,9 +28,11 @@ classifiers = [
 dependencies = [
     "certifi>=2024.0.0",
     "google-genai>=1.0.0",
+    "huggingface_hub",
     "pydantic>=2.0.0",
     "pyyaml>=6.0",
     "tqdm>=4.65.0",
+    "transformers",
     "typer>=0.9.0",
     "whisper-timestamped>=1.14.0",
 ]
@@ -85,6 +87,9 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore:'_UnionGenericAlias' is deprecated and slated for removal in Python 3.17:DeprecationWarning:google\\.genai\\.types",
+]
 
 [tool.coverage.run]
 source = ["vidsub"]

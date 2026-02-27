@@ -71,6 +71,10 @@ Get an API key from [Google AI Studio](https://aistudio.google.com/).
 # Using Whisper (local)
 uv run vidsub run video.mp4 --engine whisper
 
+# Using a custom Whisper model from Hugging Face
+uv run vidsub run video.mp4 --engine whisper \
+  --whisper-model sam8000/whisper-large-v3-turbo-serbian-serbia
+
 # Using Gemini (cloud)
 uv run vidsub run video.mp4 --engine gemini
 ```
@@ -96,6 +100,7 @@ vidsub run <video> [options]
 
 Options:
   --engine [whisper|gemini]     Transcription engine
+  --whisper-model TEXT          Whisper model alias, local path, or Hugging Face repo id
   -c, --config PATH            Config file path
   -o, --out-dir PATH           Output directory
   -t, --temp-dir PATH          Temporary directory
@@ -187,7 +192,9 @@ engine:
   language: "en"                # ISO 639-1 language code
 
 whisper:
-  model: "large"                # tiny|base|small|medium|large|large-v2|large-v3
+  # Built-in aliases: tiny, base, small, medium, large, large-v2, large-v3
+  # Or use a local path / Hugging Face repo id
+  model: "large"
   device: "auto"                # auto | cpu | cuda | mps
   vad: true                     # Voice activity detection
   accurate: true                # Accurate timestamp mode
@@ -257,6 +264,15 @@ ffmpeg:
       pixel_format: "yuv420p"
       description: "Maximum quality for archival"
 ```
+
+`whisper.model` accepts:
+- built-in aliases: `tiny`, `base`, `small`, `medium`, `large`, `large-v2`, `large-v3`
+- local model paths such as `./models/whisper-large-v3-serbian`
+- public Hugging Face repo IDs such as `sam8000/whisper-large-v3-turbo-serbian-serbia`
+
+When you use a Hugging Face repo ID, vidsub downloads the snapshot first with the Hugging Face
+library and then loads the local downloaded files for transcription. Public models do not require
+login.
 
 ### Environment Variables
 
@@ -348,8 +364,9 @@ Use `--preset <name>` to select a preset, or define custom presets in your confi
    ```
 
 2. **For Whisper (local transcription):**
-   - First run will download the Whisper model (~3GB for `large`)
-   - Models are cached in `~/.cache/whisper/`
+   - Built-in Whisper aliases download on first use (~3GB for `large`)
+   - Hugging Face repo IDs download to the Hugging Face cache first, then run locally
+   - Public Hugging Face models do not require login
 
 3. **For Gemini (cloud transcription):**
    - Get an API key from [Google AI Studio](https://aistudio.google.com/)
@@ -386,6 +403,11 @@ Models are downloaded automatically on first use. If download fails:
 ```bash
 # Manual download using whisper CLI
 whisper --model large --download-only
+```
+
+For public Hugging Face models, pre-download the snapshot and retry:
+```bash
+uv run python -c "from huggingface_hub import snapshot_download; snapshot_download('sam8000/whisper-large-v3-turbo-serbian-serbia', token=None)"
 ```
 
 ### Gemini API errors

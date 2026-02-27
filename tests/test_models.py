@@ -10,6 +10,7 @@ from vidsub.models import (
     EngineConfig,
     GeminiConfig,
     Segment,
+    WhisperConfig,
     Word,
 )
 
@@ -86,6 +87,12 @@ class TestConfig:
         assert config.app.out_dir == "./custom"
         assert config.engine.name == "gemini"
 
+    def test_config_accepts_hugging_face_whisper_model(self) -> None:
+        config = Config(
+            whisper=WhisperConfig(model="sam8000/whisper-large-v3-turbo-serbian-serbia")
+        )
+        assert config.whisper.model == "sam8000/whisper-large-v3-turbo-serbian-serbia"
+
     def test_gemini_defaults_are_throughput_tuned(self) -> None:
         gemini = GeminiConfig()
         assert gemini.chunk_seconds == 60
@@ -152,3 +159,7 @@ class TestModelEdgeCases:
         )
         assert "世界" in seg.text
         assert "👋" in seg.text
+
+    def test_whisper_model_with_whitespace_only_text_fails(self) -> None:
+        with pytest.raises(ValidationError):
+            WhisperConfig(model="   ")

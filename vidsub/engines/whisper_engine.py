@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -19,6 +21,22 @@ logger = logging.getLogger(__name__)
 
 # Whisper models in order of size/accuracy
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]
+WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
+ModelCacheKey = tuple[str, str]
+
+
+def _is_local_model_path(model_ref: str) -> bool:
+    """Return whether a model reference is explicitly path-like."""
+    return (
+        model_ref.startswith(("/", "./", "../", "~/", ".\\", "..\\", "\\\\"))
+        or WINDOWS_DRIVE_PATTERN.match(model_ref) is not None
+        or "\\" in model_ref
+    )
+
+
+def _expand_model_path(model_ref: str) -> Path:
+    """Expand env vars and user home in a model path."""
+    return Path(os.path.expandvars(model_ref)).expanduser()
 
 
 def _get_device(preferred: str) -> str:
@@ -52,7 +70,7 @@ def _get_device(preferred: str) -> str:
 class WhisperEngine(TranscriptionEngine):
     """Whisper transcription engine using whisper-timestamped."""
 
-    _model_cache: dict[str, Any] = {}
+    _model_cache: dict[ModelCacheKey, Any] = {}
 
     @property
     def name(self) -> str:
@@ -63,17 +81,83 @@ class WhisperEngine(TranscriptionEngine):
         import whisper_timestamped  # type: ignore[import-untyped]
 
         model_name = self.config.whisper.model
+        device = _get_device(self.config.whisper.device)
+        cache_ref, load_ref = self._resolve_model_reference(model_name)
+        cache_key = (cache_ref, device)
 
-        if model_name not in self._model_cache:
+        if cache_key not in self._model_cache:
             logger.info(f"Loading Whisper model: {model_name}")
-            device = _get_device(self.config.whisper.device)
 
             # Apply SSL patch for certificate verification on macOS
-            with patched_urlopen():
-                model = whisper_timestamped.load_model(model_name, device=device)
-            self._model_cache[model_name] = model
+            try:
+                with patched_urlopen():
+                    model = whisper_timestamped.load_model(load_ref, device=device)
+            except ImportError as e:
+                if "transformers" in str(e).lower():
+                    raise TranscriptionError(
+                        "Custom/Hugging Face Whisper models require 'transformers' "
+                        "to be installed."
+                    ) from e
+                raise TranscriptionError(f"Failed to load Whisper model '{model_name}': {e}") from e
+            except Exception as e:
+                raise TranscriptionError(f"Failed to load Whisper model '{model_name}': {e}") from e
+            self._model_cache[cache_key] = model
 
-        return self._model_cache[model_name]
+        return self._model_cache[cache_key]
+
+    def _resolve_model_reference(self, model_name: str) -> tuple[str, str]:
+        """Resolve the configured model into a cache key and load target."""
+        expanded_path = _expand_model_path(model_name)
+
+        if expanded_path.exists():
+            resolved_path = str(expanded_path.resolve())
+            if expanded_path.is_dir():
+                self._ensure_transformers_available()
+                logger.info(f"Using local Whisper model directory: {resolved_path}")
+            else:
+                logger.info(f"Using local Whisper model file: {resolved_path}")
+            return f"local:{resolved_path}", resolved_path
+
+        if _is_local_model_path(model_name):
+            raise TranscriptionError(f"Local Whisper model directory not found: {expanded_path}")
+
+        if "/" in model_name:
+            load_path = self._download_hugging_face_model(model_name)
+            return f"hf:{model_name}", load_path
+
+        return f"builtin:{model_name}", model_name
+
+    def _download_hugging_face_model(self, repo_id: str) -> str:
+        """Download a public Hugging Face Whisper model snapshot."""
+        self._ensure_transformers_available()
+
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError as e:
+            raise TranscriptionError(
+                "Hugging Face model downloads require 'huggingface_hub' to be installed."
+            ) from e
+
+        logger.info(f"Downloading Whisper model from Hugging Face: {repo_id}")
+
+        try:
+            downloaded_path = snapshot_download(repo_id=repo_id, token=None)
+        except Exception as e:
+            raise TranscriptionError(
+                f"Failed to download Hugging Face model '{repo_id}'. Public repos do not "
+                "require login, but private or gated repos need access."
+            ) from e
+
+        return str(Path(downloaded_path).resolve())
+
+    def _ensure_transformers_available(self) -> None:
+        """Ensure optional transformers dependency is installed for custom Whisper models."""
+        try:
+            __import__("transformers")
+        except ImportError as e:
+            raise TranscriptionError(
+                "Custom/Hugging Face Whisper models require 'transformers' to be installed."
+            ) from e
 
     def transcribe(self, input_path: Path) -> CanonicalTranscript:
         """Transcribe audio/video using whisper-timestamped.

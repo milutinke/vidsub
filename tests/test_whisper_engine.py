@@ -1,11 +1,16 @@
 """Tests for Whisper transcription engine."""
 
+import builtins
+import sys
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 from unittest import mock
 
 import pytest
 
-from vidsub.engines.base import EngineFactory
+from vidsub.engines.base import EngineFactory, TranscriptionError
 from vidsub.engines.whisper_engine import WhisperEngine, _get_device
 from vidsub.models import Config, EngineConfig, WhisperConfig
 
@@ -26,6 +31,10 @@ class TestGetDevice:
 
 class TestWhisperEngine:
     """Tests for WhisperEngine."""
+
+    @pytest.fixture(autouse=True)
+    def clear_model_cache(self) -> None:
+        WhisperEngine._model_cache.clear()
 
     @pytest.fixture
     def config(self) -> Config:
@@ -122,6 +131,134 @@ class TestWhisperEngine:
         assert result.segments[0].text == "Hello world"
         assert result.segments[0].words is not None
         assert len(result.segments[0].words) == 2
+
+    def test_load_model_uses_local_model_directory(
+        self,
+        config: Config,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        model_dir = tmp_path / "custom-whisper-model"
+        model_dir.mkdir()
+        config.whisper.model = str(model_dir)
+        fake_module = SimpleNamespace(load_model=mock.MagicMock(return_value="local-model"))
+        monkeypatch.setitem(sys.modules, "whisper_timestamped", fake_module)
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace())
+        monkeypatch.setattr("vidsub.engines.whisper_engine.patched_urlopen", nullcontext)
+
+        engine = WhisperEngine(config)
+        model = engine._load_model()
+
+        assert model == "local-model"
+        fake_module.load_model.assert_called_once_with(str(model_dir.resolve()), device="cpu")
+
+    def test_load_model_downloads_hugging_face_repo_first(
+        self,
+        config: Config,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        config.whisper.model = "sam8000/whisper-large-v3-turbo-serbian-serbia"
+        downloaded_dir = tmp_path / "hf-cache" / "snapshot"
+        fake_whisper = SimpleNamespace(load_model=mock.MagicMock(return_value="hf-model"))
+        snapshot_download = mock.MagicMock(return_value=str(downloaded_dir))
+
+        monkeypatch.setitem(sys.modules, "whisper_timestamped", fake_whisper)
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace())
+        monkeypatch.setitem(
+            sys.modules,
+            "huggingface_hub",
+            SimpleNamespace(snapshot_download=snapshot_download),
+        )
+        monkeypatch.setattr("vidsub.engines.whisper_engine.patched_urlopen", nullcontext)
+
+        engine = WhisperEngine(config)
+        model = engine._load_model()
+
+        assert model == "hf-model"
+        snapshot_download.assert_called_once_with(
+            repo_id="sam8000/whisper-large-v3-turbo-serbian-serbia",
+            token=None,
+        )
+        fake_whisper.load_model.assert_called_once_with(str(downloaded_dir), device="cpu")
+
+    def test_load_model_rejects_missing_explicit_local_path(
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        config.whisper.model = "./missing-whisper-model"
+        monkeypatch.setattr("vidsub.engines.whisper_engine.patched_urlopen", nullcontext)
+        monkeypatch.setitem(
+            sys.modules,
+            "whisper_timestamped",
+            SimpleNamespace(load_model=mock.MagicMock()),
+        )
+
+        engine = WhisperEngine(config)
+
+        with pytest.raises(TranscriptionError, match="Local Whisper model directory not found"):
+            engine._load_model()
+
+    def test_load_model_requires_transformers_for_hugging_face_models(
+        self,
+        config: Config,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        config.whisper.model = "sam8000/whisper-large-v3-turbo-serbian-serbia"
+        original_import = builtins.__import__
+
+        def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name == "transformers":
+                raise ImportError("No module named 'transformers'")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        monkeypatch.setitem(
+            sys.modules,
+            "whisper_timestamped",
+            SimpleNamespace(load_model=mock.MagicMock()),
+        )
+        monkeypatch.setattr("vidsub.engines.whisper_engine.patched_urlopen", nullcontext)
+
+        engine = WhisperEngine(config)
+
+        with pytest.raises(
+            TranscriptionError,
+            match="Custom/Hugging Face Whisper models require 'transformers'",
+        ):
+            engine._load_model()
+
+    def test_load_model_cache_is_separated_by_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        fake_whisper = SimpleNamespace(
+            load_model=mock.MagicMock(side_effect=["cpu-model", "cuda-model"])
+        )
+        monkeypatch.setitem(sys.modules, "whisper_timestamped", fake_whisper)
+        monkeypatch.setattr("vidsub.engines.whisper_engine.patched_urlopen", nullcontext)
+
+        cpu_engine = WhisperEngine(
+            Config(
+                engine=EngineConfig(name="whisper", language="en"),
+                whisper=WhisperConfig(model="base", device="cpu"),
+            )
+        )
+        cuda_engine = WhisperEngine(
+            Config(
+                engine=EngineConfig(name="whisper", language="en"),
+                whisper=WhisperConfig(model="base", device="cuda"),
+            )
+        )
+
+        assert cpu_engine._load_model() == "cpu-model"
+        assert cuda_engine._load_model() == "cuda-model"
+        assert fake_whisper.load_model.call_args_list == [
+            mock.call("base", device="cpu"),
+            mock.call("base", device="cuda"),
+        ]
 
 
 class TestEngineFactory:

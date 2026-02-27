@@ -12,6 +12,8 @@ engine:
   language: "en"
 
 whisper:
+  # Built-in aliases: tiny, base, small, medium, large, large-v2, large-v3
+  # Or use a local path / Hugging Face repo id
   model: "large"
   device: "auto"   # auto, cpu, cuda, mps
   vad: true
